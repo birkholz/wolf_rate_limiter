@@ -67,7 +67,6 @@ allowed = rate_limiter.allow_request?(Time.now.to_i, "user_123")
 
 - Redis server
 - Ruby 3+
-- redis gem
 
 ## Setup
 
