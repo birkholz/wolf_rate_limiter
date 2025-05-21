@@ -11,12 +11,14 @@ class RateLimiter
     key = "rate_limit:#{user_id}"
     window_start = timestamp - @time_window
 
+    # First transaction: remove expired requests and count current requests
     results = @redis.multi do |redis|
       redis.zremrangebyscore(key, 0, window_start)
-      redis.zrangebyscore(key, window_start, timestamp)
+      redis.zcard(key)
     end
 
-    if results[1].size < @max_requests
+    # If under the limit, add the new request
+    if results[1] < @max_requests
       @redis.multi do |redis|
         redis.zadd(key, timestamp, timestamp.to_s)
         redis.expire(key, @time_window)
