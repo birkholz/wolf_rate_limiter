@@ -1,6 +1,6 @@
-# Redis-based Rate Limiter
-
 [![Tests](https://github.com/birkholz/wolf_rate_limiter/actions/workflows/test.yml/badge.svg)](https://github.com/birkholz/wolf_rate_limiter/actions/workflows/test.yml)
+
+# Redis-based Rate Limiter
 
 A sliding window rate limiter implementation written in Ruby using Redis and Lua scripting. This implementation ensures atomic operations and consistent rate limiting across multiple instances.
 
@@ -95,3 +95,7 @@ Run the test suite with:
 ```bash
 bundle exec rspec
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
