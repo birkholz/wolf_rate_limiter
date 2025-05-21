@@ -2,35 +2,54 @@ require 'redis'
 require 'securerandom'
 
 class RateLimiter
+  # Using Lua script for atomic operations:
+  # 1. Ensures all Redis operations (removing expired requests, counting current requests,
+  #    and adding new requests) happen in a single atomic transaction
+  # 2. Eliminates race conditions that could occur with separate Redis commands
+  # 3. Reduces network round trips by executing all operations in Redis's memory
+  # 4. Maintains O(1) time complexity while guaranteeing consistency
+  LUA_SCRIPT = <<~LUA
+    local key = KEYS[1]
+    local timestamp = tonumber(ARGV[1])
+    local window_start = timestamp - tonumber(ARGV[2])
+    local max_requests = tonumber(ARGV[3])
+    local request_id = ARGV[4]
+
+    -- Remove expired requests (using exclusive boundary)
+    redis.call('ZREMRANGEBYSCORE', key, 0, '(' .. window_start)
+
+    -- Count requests in the window
+    local request_count = redis.call('ZCARD', key)
+
+    -- If under the limit, add the request
+    if request_count < max_requests then
+        redis.call('ZADD', key, timestamp, request_id)
+        redis.call('EXPIRE', key, ARGV[2])
+        return 1
+    end
+    return 0
+  LUA
+
   def initialize(time_window, max_requests)
     @time_window = time_window
     @max_requests = max_requests
     @redis = Redis.new(host: 'localhost', port: 6379)
+    @script = @redis.script(:load, LUA_SCRIPT)
   end
 
   def allow_request?(timestamp, user_id)
     key = "rate_limit:#{user_id}"
-    window_start = timestamp - @time_window
+    # Timestamps are in seconds, so we add a random 4-character hex string to avoid collisions
+    request_id = "#{timestamp}:#{SecureRandom.hex(4)}"
 
-    # First transaction: remove expired requests and count requests in the window
-    results = @redis.multi do |redis|
-      # Remove requests older than window_start (inclusive)
-      redis.zremrangebyscore(key, 0, window_start - 1)
-      # Count requests in the window (inclusive of window_start, inclusive of current timestamp)
-      redis.zcount(key, window_start, timestamp)
-    end
+    # Execute the Lua script atomically
+    result = @redis.evalsha(
+      @script,
+      keys: [key],
+      argv: [timestamp, @time_window, @max_requests, request_id]
+    )
 
-    # If under the limit, add the new request
-    if results[1] < @max_requests
-      @redis.multi do |redis|
-        # Add request with timestamp as score and a unique member to prevent timestamp collisions
-        redis.zadd(key, timestamp, "#{timestamp}:#{SecureRandom.hex(4)}")
-        # Set expiration, so absent users will be cleaned up automatically
-        redis.expire(key, @time_window)
-      end
-      true
-    else
-      false
-    end
+    # 1 means allowed, 0 means rejected
+    result == 1
   end
 end
