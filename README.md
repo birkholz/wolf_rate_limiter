@@ -1,4 +1,4 @@
-[![Tests](https://github.com/birkholz/wolf_rate_limiter/actions/workflows/test.yml/badge.svg)](https://github.com/birkholz/wolf_rate_limiter/actions/workflows/test.yml)
+[![Tests](https://github.com/birkholz/wolf_rate_limiter/workflows/CI/badge.svg)](https://github.com/birkholz/wolf_rate_limiter/actions?workflow=CI)
 
 # Redis-based Rate Limiter
 
